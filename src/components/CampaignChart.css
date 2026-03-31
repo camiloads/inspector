@@ -129,3 +129,26 @@
   .card-stats { align-self: flex-start; }
   .card-title { max-width: 100%; white-space: normal; }
 }
+
+/* ── Alert state (trailing zeros) ── */
+.card-alert {
+  border-color: rgba(255, 51, 85, 0.35);
+  background: rgba(255, 51, 85, 0.04);
+}
+
+.card-alert:hover {
+  border-color: rgba(255, 51, 85, 0.6);
+}
+
+.alert-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #ff3355;
+  background: rgba(255, 51, 85, 0.12);
+  border: 1px solid rgba(255, 51, 85, 0.3);
+  border-radius: 20px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
