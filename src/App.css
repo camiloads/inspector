@@ -42,8 +42,7 @@ export const KPIS = [
   {
     key: 'cpa',
     label: 'CPA',
-    aliases: [],
-    calculated: true,
+    aliases: ['coste/conv', 'cost/conv', 'cpa', 'coste por conversion', 'cost per conversion', 'coste/conv.'],
     format: (v) => `€${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     color: '#ff47a0',
     unit: '€',
@@ -69,7 +68,7 @@ function detectColumns(headers) {
 
   const kpiCols = {}
   KPIS.forEach((kpi) => {
-    kpiCols[kpi.key] = kpi.calculated ? 'calculated' : findCol(kpi.aliases)
+    kpiCols[kpi.key] = findCol(kpi.aliases)
   })
 
   return { dateCol, campaignCol, kpiCols }
@@ -112,7 +111,6 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
 
     const entry = { date }
     KPIS.forEach((kpi) => {
-      if (kpi.calculated) return
       const col = kpiCols[kpi.key]
       entry[kpi.key] = col ? parseEuropeanNumber(row[col]) : 0
     })
@@ -120,7 +118,6 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
     if (dateMap.has(date)) {
       const existing = dateMap.get(date)
       KPIS.forEach((kpi) => {
-        if (kpi.calculated) return
         existing[kpi.key] = (existing[kpi.key] || 0) + (entry[kpi.key] || 0)
       })
     } else {
@@ -130,10 +127,6 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
 
   const campaigns = []
   campaignMap.forEach((dateMap, name) => {
-    dateMap.forEach((entry) => {
-      const conv = entry.conversions || 0
-      entry.cpa = conv > 0 ? (entry.cost || 0) / conv : 0
-    })
     const data = Array.from(dateMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date))
     campaigns.push({ name, data })
   })
@@ -244,8 +237,10 @@ export default function App() {
 
   const currentKpi = KPIS.find((k) => k.key === selectedKpi)
 
-  // CPA siempre visible porque es calculado, no depende de columna del CSV
-  const availableKpis = KPIS
+  // Solo mostrar KPIs cuya columna existe en el CSV cargado
+  const availableKpis = columns
+    ? KPIS.filter((k) => columns.kpiCols[k.key] !== null)
+    : KPIS
 
   return (
     <div className="app">
