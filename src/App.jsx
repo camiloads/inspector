@@ -274,7 +274,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        <span>Campaign Evolution Viewer · {new Date().getFullYear()}</span>
+        Campaign Evolution Viewer · {new Date().getFullYear()} by Camilo Soler
       </footer>
     </div>
   )
