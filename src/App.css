@@ -61,7 +61,6 @@ function norm(str) {
 
 // ─── Column detection ─────────────────────────────────────────────────────
 function detectColumns(headers) {
-  // Find a column whose normalized header contains any of the aliases
   const findCol = (aliases) =>
     headers.find((h) => aliases.some((a) => norm(h).includes(norm(a)))) || null
 
@@ -70,37 +69,30 @@ function detectColumns(headers) {
 
   const kpiCols = {}
   KPIS.forEach((kpi) => {
-    kpiCols[kpi.key] = findCol(kpi.aliases)
+    kpiCols[kpi.key] = kpi.calculated ? 'calculated' : findCol(kpi.aliases)
   })
 
   return { dateCol, campaignCol, kpiCols }
 }
 
 // ─── Parse a European-format number string ────────────────────────────────
-// Handles: "16,52" → 16.52 | "1.234" → 1234 | "1.234,56" → 1234.56
 function parseEuropeanNumber(raw) {
   if (!raw) return 0
   const s = String(raw).trim()
   if (!s || s === '-') return 0
-
-  // If both dot and comma exist → European thousands+decimal format
   if (s.includes('.') && s.includes(',')) {
-    // "1.234,56" → remove dots (thousands), replace comma with dot
     return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
   }
-  // Only comma → decimal separator: "16,52" → 16.52
   if (s.includes(',') && !s.includes('.')) {
     return parseFloat(s.replace(',', '.')) || 0
   }
-  // Only dot → could be thousands ("1.234") or decimal ("16.52")
-  // Heuristic: if exactly 3 digits after dot → thousands separator
   if (s.includes('.') && /\.\d{3}$/.test(s)) {
     return parseFloat(s.replace('.', '')) || 0
   }
   return parseFloat(s) || 0
 }
 
-// ─── Strip BOM and non-printable chars from a string ─────────────────────
+// ─── Strip BOM and non-printable chars ───────────────────────────────────
 function cleanStr(str) {
   return (str || '').replace(/^\uFEFF/, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
 }
@@ -113,7 +105,6 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
     const campaign = cleanStr(row[campaignCol])
     const date = cleanStr(row[dateCol])
     if (!campaign || !date) return
-    // Skip rows that look like header repetitions or totals
     if (norm(campaign).includes('campan') && norm(date).includes('d')) return
 
     if (!campaignMap.has(campaign)) campaignMap.set(campaign, new Map())
@@ -137,20 +128,13 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
     }
   })
 
-  // ── Calculate CPA = cost / conversions per date, after all rows aggregated
   const campaigns = []
   campaignMap.forEach((dateMap, name) => {
-    // Compute CPA for each date entry
     dateMap.forEach((entry) => {
       const conv = entry.conversions || 0
       entry.cpa = conv > 0 ? (entry.cost || 0) / conv : 0
     })
-    const data = Array.from(dateMap.values()).sort((a, b) => {
-      // Parse M/D/YYYY or D/M/YYYY — try as-is first then swap
-      const da = new Date(a.date)
-      const db = new Date(b.date)
-      return da - db
-    })
+    const data = Array.from(dateMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date))
     campaigns.push({ name, data })
   })
 
@@ -161,14 +145,9 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
 function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-
-    // First try UTF-16 (common in Google Ads / Windows exports)
     reader.onload = (e) => {
       let text = e.target.result
-      // If it looks like UTF-16 garbage (lots of null bytes as spaces), it decoded wrong
-      // UTF-16 LE files read as UTF-8 show \x00 between every char
       if (text.charCodeAt(1) === 0 || (text.length > 10 && text.charCodeAt(2) === 0)) {
-        // Re-read as UTF-16
         const reader2 = new FileReader()
         reader2.onload = (e2) => resolve(e2.target.result)
         reader2.onerror = reject
@@ -203,8 +182,7 @@ export default function App() {
       Papa.parse(text, {
         header: true,
         skipEmptyLines: true,
-        // Try both comma and tab/semicolon as delimiters
-        delimiter: '',   // auto-detect
+        delimiter: '',
         transformHeader: (h) => cleanStr(h),
         complete: (results) => {
           let rows = results.data
@@ -216,28 +194,19 @@ export default function App() {
             return
           }
 
-          // Skip header rows that don't look like data
-          // (Google Ads exports often have 2 title rows before real headers)
-          // Real data rows have a date-like value in the date column
           const cols = detectColumns(headers)
 
           if (!cols.dateCol) {
-            // Try to find data by skipping first rows and re-parsing
-            setError(
-              `No se encontró columna de Fecha/Día. Columnas detectadas: ${headers.slice(0, 6).join(' | ')}`
-            )
+            setError(`No se encontró columna de Fecha/Día. Columnas detectadas: ${headers.slice(0, 6).join(' | ')}`)
             setLoading(false)
             return
           }
           if (!cols.campaignCol) {
-            setError(
-              `No se encontró columna de Campaña. Columnas detectadas: ${headers.slice(0, 6).join(' | ')}`
-            )
+            setError(`No se encontró columna de Campaña. Columnas detectadas: ${headers.slice(0, 6).join(' | ')}`)
             setLoading(false)
             return
           }
 
-          // Filter out rows where the date column doesn't look like a date
           rows = rows.filter((row) => {
             const d = cleanStr(row[cols.dateCol])
             return d && /\d/.test(d) && d !== cols.dateCol
@@ -274,13 +243,12 @@ export default function App() {
   }
 
   const currentKpi = KPIS.find((k) => k.key === selectedKpi)
-  const availableKpis = columns
-    ? KPIS.filter((k) => k.calculated || columns.kpiCols[k.key] !== null)
-    : KPIS
+
+  // CPA siempre visible porque es calculado, no depende de columna del CSV
+  const availableKpis = KPIS
 
   return (
     <div className="app">
-      {/* ── Header ── */}
       <header className="app-header">
         <div className="header-inner">
           <div className="logo">
@@ -301,7 +269,6 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {/* ── Upload state ── */}
         {campaigns.length === 0 && (
           <div className="upload-section">
             <div className="upload-hero">
@@ -333,7 +300,6 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Charts state ── */}
         {campaigns.length > 0 && (
           <div className="charts-section">
             <div className="controls-bar">
