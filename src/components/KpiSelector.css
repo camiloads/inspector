@@ -1,0 +1,49 @@
+.kpi-selector {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.kpi-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: -0.01em;
+}
+
+.kpi-btn:hover {
+  border-color: var(--kpi-color);
+  color: var(--kpi-color);
+  background: rgba(255,255,255,0.03);
+}
+
+.kpi-btn.active {
+  border-color: var(--kpi-color);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+}
+
+.kpi-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--kpi-color);
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.kpi-btn.active .kpi-dot,
+.kpi-btn:hover .kpi-dot {
+  opacity: 1;
+}

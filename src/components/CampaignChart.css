@@ -1,0 +1,131 @@
+.campaign-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.2rem 1.5rem 1rem;
+  transition: border-color 0.2s;
+  animation: fadeIn 0.4s ease both;
+}
+
+.campaign-card:hover {
+  border-color: var(--border-bright);
+}
+
+/* ── Header ── */
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.card-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.card-index {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 500px;
+}
+
+/* ── Stats ── */
+.card-stats {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+}
+
+/* ── Chart area ── */
+.card-chart {
+  width: 100%;
+}
+
+.no-data {
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  opacity: 0.5;
+  font-style: italic;
+}
+
+/* ── Tooltip ── */
+.chart-tooltip {
+  background: rgba(15, 15, 22, 0.95);
+  border: 1px solid var(--border-bright);
+  border-radius: 8px;
+  padding: 8px 12px;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+}
+
+.tt-date {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.tt-value {
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .campaign-card { padding: 1rem; }
+  .card-header { flex-direction: column; gap: 0.5rem; }
+  .card-stats { align-self: flex-start; }
+  .card-title { max-width: 100%; white-space: normal; }
+}
