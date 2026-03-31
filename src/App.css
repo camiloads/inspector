@@ -1,279 +1,370 @@
-/* ── Layout ─────────────────────────────────────────────────────────────── */
-.app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+import { useState, useCallback, useRef } from 'react'
+import Papa from 'papaparse'
+import CampaignChart from './components/CampaignChart.jsx'
+import KpiSelector from './components/KpiSelector.jsx'
+import DropZone from './components/DropZone.jsx'
+import './App.css'
+
+// ─── KPI definitions ────────────────────────────────────────────────────────
+export const KPIS = [
+  {
+    key: 'cost',
+    label: 'Coste',
+    aliases: ['cost', 'coste', 'costo', 'spend', 'gasto', 'importe'],
+    format: (v) => `€${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    color: '#e8ff47',
+    unit: '€',
+  },
+  {
+    key: 'impressions',
+    label: 'Impresiones',
+    aliases: ['impressions', 'impresiones', 'impr', 'impr.'],
+    format: (v) => Number(v).toLocaleString('es-ES'),
+    color: '#47c8ff',
+    unit: '',
+  },
+  {
+    key: 'clicks',
+    label: 'Clics',
+    aliases: ['clicks', 'clics', 'clic', 'click'],
+    format: (v) => Number(v).toLocaleString('es-ES'),
+    color: '#ff7847',
+    unit: '',
+  },
+  {
+    key: 'conversions',
+    label: 'Conversiones',
+    aliases: ['conversions', 'conversiones', 'conv', 'conv.'],
+    format: (v) => Number(v).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+    color: '#b847ff',
+    unit: '',
+  },
+  {
+    key: 'cpa',
+    label: 'CPA',
+    aliases: [],
+    calculated: true,
+    format: (v) => `€${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    color: '#ff47a0',
+    unit: '€',
+  },
+]
+
+// ─── Normalize text: lowercase, remove accents, trim ─────────────────────
+function norm(str) {
+  return (str || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
 }
 
-/* ── Header ─────────────────────────────────────────────────────────────── */
-.app-header {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: rgba(10,10,15,0.85);
-  backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--border);
+// ─── Column detection ─────────────────────────────────────────────────────
+function detectColumns(headers) {
+  // Find a column whose normalized header contains any of the aliases
+  const findCol = (aliases) =>
+    headers.find((h) => aliases.some((a) => norm(h).includes(norm(a)))) || null
+
+  const dateCol = findCol(['dia', 'day', 'date', 'fecha', 'periodo', 'period'])
+  const campaignCol = findCol(['campana', 'campaign', 'campaign name', 'nombre de campana'])
+
+  const kpiCols = {}
+  KPIS.forEach((kpi) => {
+    kpiCols[kpi.key] = findCol(kpi.aliases)
+  })
+
+  return { dateCol, campaignCol, kpiCols }
 }
 
-.header-inner {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 2rem;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+// ─── Parse a European-format number string ────────────────────────────────
+// Handles: "16,52" → 16.52 | "1.234" → 1234 | "1.234,56" → 1234.56
+function parseEuropeanNumber(raw) {
+  if (!raw) return 0
+  const s = String(raw).trim()
+  if (!s || s === '-') return 0
+
+  // If both dot and comma exist → European thousands+decimal format
+  if (s.includes('.') && s.includes(',')) {
+    // "1.234,56" → remove dots (thousands), replace comma with dot
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
+  }
+  // Only comma → decimal separator: "16,52" → 16.52
+  if (s.includes(',') && !s.includes('.')) {
+    return parseFloat(s.replace(',', '.')) || 0
+  }
+  // Only dot → could be thousands ("1.234") or decimal ("16.52")
+  // Heuristic: if exactly 3 digits after dot → thousands separator
+  if (s.includes('.') && /\.\d{3}$/.test(s)) {
+    return parseFloat(s.replace('.', '')) || 0
+  }
+  return parseFloat(s) || 0
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 1.1rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.logo-icon { color: var(--accent); font-size: 1.3rem; }
-.logo-text em { color: var(--accent); font-style: normal; }
-
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  animation: slideDown 0.4s ease;
+// ─── Strip BOM and non-printable chars from a string ─────────────────────
+function cleanStr(str) {
+  return (str || '').replace(/^\uFEFF/, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
 }
 
-.file-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  padding: 4px 10px;
-  border-radius: 20px;
+// ─── Parse & group CSV data ───────────────────────────────────────────────
+function processData(rows, { dateCol, campaignCol, kpiCols }) {
+  const campaignMap = new Map()
+
+  rows.forEach((row) => {
+    const campaign = cleanStr(row[campaignCol])
+    const date = cleanStr(row[dateCol])
+    if (!campaign || !date) return
+    // Skip rows that look like header repetitions or totals
+    if (norm(campaign).includes('campan') && norm(date).includes('d')) return
+
+    if (!campaignMap.has(campaign)) campaignMap.set(campaign, new Map())
+    const dateMap = campaignMap.get(campaign)
+
+    const entry = { date }
+    KPIS.forEach((kpi) => {
+      if (kpi.calculated) return
+      const col = kpiCols[kpi.key]
+      entry[kpi.key] = col ? parseEuropeanNumber(row[col]) : 0
+    })
+
+    if (dateMap.has(date)) {
+      const existing = dateMap.get(date)
+      KPIS.forEach((kpi) => {
+        if (kpi.calculated) return
+        existing[kpi.key] = (existing[kpi.key] || 0) + (entry[kpi.key] || 0)
+      })
+    } else {
+      dateMap.set(date, entry)
+    }
+  })
+
+  // ── Calculate CPA = cost / conversions per date, after all rows aggregated
+  const campaigns = []
+  campaignMap.forEach((dateMap, name) => {
+    // Compute CPA for each date entry
+    dateMap.forEach((entry) => {
+      const conv = entry.conversions || 0
+      entry.cpa = conv > 0 ? (entry.cost || 0) / conv : 0
+    })
+    const data = Array.from(dateMap.values()).sort((a, b) => {
+      // Parse M/D/YYYY or D/M/YYYY — try as-is first then swap
+      const da = new Date(a.date)
+      const db = new Date(b.date)
+      return da - db
+    })
+    campaigns.push({ name, data })
+  })
+
+  return campaigns
 }
 
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: pulse-dot 2s infinite;
+// ─── Read file as text, handling UTF-16 and UTF-8 ────────────────────────
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+
+    // First try UTF-16 (common in Google Ads / Windows exports)
+    reader.onload = (e) => {
+      let text = e.target.result
+      // If it looks like UTF-16 garbage (lots of null bytes as spaces), it decoded wrong
+      // UTF-16 LE files read as UTF-8 show \x00 between every char
+      if (text.charCodeAt(1) === 0 || (text.length > 10 && text.charCodeAt(2) === 0)) {
+        // Re-read as UTF-16
+        const reader2 = new FileReader()
+        reader2.onload = (e2) => resolve(e2.target.result)
+        reader2.onerror = reject
+        reader2.readAsText(file, 'UTF-16')
+      } else {
+        resolve(text)
+      }
+    }
+    reader.onerror = reject
+    reader.readAsText(file, 'UTF-8')
+  })
 }
 
-.campaigns-count {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
+// ─── App ──────────────────────────────────────────────────────────────────
+export default function App() {
+  const [campaigns, setCampaigns] = useState([])
+  const [columns, setColumns] = useState(null)
+  const [selectedKpi, setSelectedKpi] = useState('cost')
+  const [fileName, setFileName] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const fileInputRef = useRef(null)
 
-.btn-ghost {
-  background: transparent;
-  border: 1px solid var(--border-bright);
-  color: var(--text);
-  font-family: var(--font-display);
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.btn-ghost:hover {
-  background: var(--bg3);
-  border-color: var(--accent);
-  color: var(--accent);
-}
+  const handleFile = useCallback(async (file) => {
+    if (!file) return
+    setError('')
+    setLoading(true)
 
-/* ── Main ────────────────────────────────────────────────────────────────── */
-.app-main {
-  flex: 1;
-  width: 100%;
-  margin: 0 auto;
-  padding: 0 2rem 4rem;
-}
+    try {
+      const text = await readFileAsText(file)
 
-/* ── Upload Section ──────────────────────────────────────────────────────── */
-.upload-section {
-  min-height: calc(100vh - 60px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2.5rem;
-  padding: 4rem 1rem;
-  animation: fadeIn 0.5s ease;
-  max-width: 680px;
-  margin: 0 auto;
-}
+      Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        // Try both comma and tab/semicolon as delimiters
+        delimiter: '',   // auto-detect
+        transformHeader: (h) => cleanStr(h),
+        complete: (results) => {
+          let rows = results.data
+          const headers = results.meta.fields || []
 
-.upload-hero {
-  text-align: center;
-  width: 100%;
-}
+          if (headers.length === 0) {
+            setError('El archivo CSV está vacío o no tiene encabezados reconocibles.')
+            setLoading(false)
+            return
+          }
 
-.upload-hero h1 {
-  font-size: clamp(2.2rem, 5vw, 3.8rem);
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
-  margin-bottom: 1.2rem;
-}
+          // Skip header rows that don't look like data
+          // (Google Ads exports often have 2 title rows before real headers)
+          // Real data rows have a date-like value in the date column
+          const cols = detectColumns(headers)
 
-.upload-hero h1 em {
-  color: var(--accent);
-  font-style: normal;
-}
+          if (!cols.dateCol) {
+            // Try to find data by skipping first rows and re-parsing
+            setError(
+              `No se encontró columna de Fecha/Día. Columnas detectadas: ${headers.slice(0, 6).join(' | ')}`
+            )
+            setLoading(false)
+            return
+          }
+          if (!cols.campaignCol) {
+            setError(
+              `No se encontró columna de Campaña. Columnas detectadas: ${headers.slice(0, 6).join(' | ')}`
+            )
+            setLoading(false)
+            return
+          }
 
-.upload-hero p {
-  font-size: 1.05rem;
-  color: var(--text-muted);
-  max-width: 500px;
-  margin: 0 auto;
-  line-height: 1.65;
-}
+          // Filter out rows where the date column doesn't look like a date
+          rows = rows.filter((row) => {
+            const d = cleanStr(row[cols.dateCol])
+            return d && /\d/.test(d) && d !== cols.dateCol
+          })
 
-/* ── Error Box ───────────────────────────────────────────────────────────── */
-.error-box {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  background: rgba(255, 60, 60, 0.08);
-  border: 1px solid rgba(255, 60, 60, 0.3);
-  border-radius: 10px;
-  padding: 1rem 1.2rem;
-  font-size: 0.88rem;
-  color: #ff8080;
-  width: 100%;
-  line-height: 1.5;
-}
+          if (rows.length === 0) {
+            setError('El archivo no contiene filas de datos válidas.')
+            setLoading(false)
+            return
+          }
 
-.error-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+          const processed = processData(rows, cols)
+          setColumns(cols)
+          setCampaigns(processed)
+          setFileName(file.name)
+          setLoading(false)
+        },
+        error: (err) => {
+          setError(`Error al leer el archivo: ${err.message}`)
+          setLoading(false)
+        },
+      })
+    } catch (err) {
+      setError(`Error al leer el archivo: ${err.message}`)
+      setLoading(false)
+    }
+  }, [])
 
-/* ── Format Hint ─────────────────────────────────────────────────────────── */
-.format-hint {
-  text-align: center;
-  width: 100%;
-}
+  const handleReset = () => {
+    setCampaigns([])
+    setColumns(null)
+    setFileName('')
+    setError('')
+  }
 
-.hint-title {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-bottom: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-}
+  const currentKpi = KPIS.find((k) => k.key === selectedKpi)
+  const availableKpis = columns
+    ? KPIS.filter((k) => k.calculated || columns.kpiCols[k.key] !== null)
+    : KPIS
 
-.hint-table {
-  display: flex;
-  justify-content: center;
-  gap: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 0.75rem;
-  width: 100%;
-}
+  return (
+    <div className="app">
+      {/* ── Header ── */}
+      <header className="app-header">
+        <div className="header-inner">
+          <div className="logo">
+            <span className="logo-icon">◈</span>
+            <span className="logo-text">Campaign<em>Evolution</em></span>
+          </div>
+          {campaigns.length > 0 && (
+            <div className="header-meta">
+              <span className="file-badge">
+                <span className="dot" />
+                {fileName}
+              </span>
+              <span className="campaigns-count">{campaigns.length} campañas</span>
+              <button className="btn-ghost" onClick={handleReset}>Cargar otro CSV</button>
+            </div>
+          )}
+        </div>
+      </header>
 
-.hint-table span {
-  font-family: var(--font-mono);
-  font-size: 0.73rem;
-  padding: 8px 0;
-  flex: 1;
-  text-align: center;
-  border-right: 1px solid var(--border);
-  background: var(--bg2);
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-.hint-table span:first-child { color: var(--accent2); }
-.hint-table span:nth-child(2) { color: var(--accent); }
-.hint-table span:last-child { border-right: none; }
+      <main className="app-main">
+        {/* ── Upload state ── */}
+        {campaigns.length === 0 && (
+          <div className="upload-section">
+            <div className="upload-hero">
+              <h1>Visualiza el evolutivo<br /><em>de tus campañas</em></h1>
+              <p>Sube un archivo CSV exportado de Google Ads y obtén gráficas de línea por KPI para cada campaña.</p>
+            </div>
 
-.hint-note {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  opacity: 0.65;
-  line-height: 1.5;
-}
+            <DropZone onFile={handleFile} fileInputRef={fileInputRef} loading={loading} />
 
-/* ── Charts Section ──────────────────────────────────────────────────────── */
-.charts-section {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 1.5rem 0;
-  animation: fadeIn 0.5s ease;
-}
+            {error && (
+              <div className="error-box">
+                <span className="error-icon">⚠</span>
+                {error}
+              </div>
+            )}
 
-.controls-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  margin-bottom: 2rem;
-  position: sticky;
-  top: 62px;
-  z-index: 90;
-  backdrop-filter: blur(16px);
-}
+            <div className="format-hint">
+              <p className="hint-title">Columnas que detecta automáticamente:</p>
+              <div className="hint-table">
+                <span>Día / Fecha</span>
+                <span>Campaña</span>
+                <span>Coste</span>
+                <span>Impr.</span>
+                <span>Clics</span>
+                <span>Conversiones</span>
+              </div>
+              <p className="hint-note">Compatible con exportaciones de Google Ads en español · UTF-8 y UTF-16 · separador coma, punto y coma o tabulación</p>
+            </div>
+          </div>
+        )}
 
-.controls-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
+        {/* ── Charts state ── */}
+        {campaigns.length > 0 && (
+          <div className="charts-section">
+            <div className="controls-bar">
+              <div className="controls-left">
+                <span className="controls-label">KPI visualizado:</span>
+                <KpiSelector kpis={availableKpis} selected={selectedKpi} onChange={setSelectedKpi} />
+              </div>
+              <div className="controls-right">
+                <span className="total-label">
+                  Mostrando <strong>{campaigns.length}</strong> campañas
+                </span>
+              </div>
+            </div>
 
-.controls-label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
+            <div className="charts-grid">
+              {campaigns.map((campaign, i) => (
+                <CampaignChart
+                  key={campaign.name}
+                  campaign={campaign}
+                  kpi={currentKpi}
+                  index={i}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </main>
 
-.controls-right {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.controls-right strong {
-  color: var(--accent);
-}
-
-.total-label { white-space: nowrap; }
-
-/* ── Charts Grid ─────────────────────────────────────────────────────────── */
-.charts-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-/* ── Footer ──────────────────────────────────────────────────────────────── */
-.app-footer {
-  border-top: 1px solid var(--border);
-  padding: 1.2rem 2rem;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  opacity: 0.5;
-}
-
-/* ── Responsive ──────────────────────────────────────────────────────────── */
-@media (max-width: 640px) {
-  .app-main { padding: 0 1rem 3rem; }
-  .header-inner { padding: 0 1rem; }
-  .hint-table { flex-wrap: wrap; }
-  .hint-table span { flex: none; width: 50%; }
-  .controls-bar { top: 60px; }
-  .upload-section { padding: 2rem 0.5rem; gap: 2rem; }
+      <footer className="app-footer">
+        <span>Campaign Evolution Viewer · {new Date().getFullYear()}</span>
+      </footer>
+    </div>
+  )
 }
