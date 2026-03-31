@@ -5,80 +5,83 @@ import KpiSelector from './components/KpiSelector.jsx'
 import DropZone from './components/DropZone.jsx'
 import './App.css'
 
-// ─── KPI definitions ────────────────────────────────────────────────────────
 export const KPIS = [
   {
     key: 'cost',
     label: 'Coste',
-    aliases: ['cost', 'coste', 'costo', 'spend', 'gasto', 'importe'],
-    format: (v) => `$${Number(v).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    aliases: ['coste', 'cost', 'costo', 'spend', 'gasto', 'importe'],
+    format: (v) => `€${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     color: '#e8ff47',
-    unit: '$',
   },
   {
     key: 'impressions',
     label: 'Impresiones',
-    aliases: ['impressions', 'impresiones', 'impr', 'impr.', 'views'],
-    format: (v) => Number(v).toLocaleString('es-CO'),
+    aliases: ['impr', 'impressions', 'impresiones'],
+    format: (v) => Number(v).toLocaleString('es-ES'),
     color: '#47c8ff',
-    unit: '',
   },
   {
     key: 'clicks',
     label: 'Clics',
-    aliases: ['clicks', 'clics', 'clics.', 'click'],
-    format: (v) => Number(v).toLocaleString('es-CO'),
+    aliases: ['clics', 'clicks', 'clic', 'click'],
+    format: (v) => Number(v).toLocaleString('es-ES'),
     color: '#ff7847',
-    unit: '',
   },
   {
     key: 'conversions',
     label: 'Conversiones',
-    aliases: ['conversions', 'conversiones', 'conv', 'conv.', 'results', 'resultados'],
-    format: (v) => Number(v).toLocaleString('es-CO'),
+    aliases: ['conversiones', 'conversions', 'conv'],
+    format: (v) => Number(v).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }),
     color: '#b847ff',
-    unit: '',
+  },
+  {
+    key: 'cpa',
+    label: 'CPA',
+    aliases: ['coste/conv', 'cost/conv', 'cpa', 'coste por conv'],
+    format: (v) => `€${Number(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    color: '#ff47a0',
   },
 ]
 
-// ─── Column detection ─────────────────────────────────────────────────────
+function norm(str) {
+  return (str || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+}
+
+function findCol(headers, aliases) {
+  return headers.find((h) => aliases.some((a) => norm(h).includes(norm(a)))) || null
+}
+
 function detectColumns(headers) {
-  const normalized = headers.map((h) => h.toLowerCase().trim())
-
-  const findCol = (aliases) =>
-    headers[normalized.findIndex((h) => aliases.some((a) => h.includes(a)))] || null
-
-  const dateCol =
-    headers[
-      normalized.findIndex((h) =>
-        ['date', 'fecha', 'day', 'día', 'dia', 'periodo', 'period'].some((a) => h.includes(a))
-      )
-    ] || null
-
-  const campaignCol =
-    headers[
-      normalized.findIndex((h) =>
-        ['campaign', 'campaña', 'campana', 'campaign name', 'nombre'].some((a) => h.includes(a))
-      )
-    ] || null
-
+  const dateCol = findCol(headers, ['dia', 'day', 'date', 'fecha'])
+  const campaignCol = findCol(headers, ['campana', 'campaign'])
   const kpiCols = {}
   KPIS.forEach((kpi) => {
-    kpiCols[kpi.key] = findCol(kpi.aliases)
+    kpiCols[kpi.key] = findCol(headers, kpi.aliases)
   })
-
   return { dateCol, campaignCol, kpiCols }
 }
 
-// ─── Parse & group CSV data ───────────────────────────────────────────────
+function parseNum(raw) {
+  if (!raw) return 0
+  const s = String(raw).trim()
+  if (!s || s === '-') return 0
+  if (s.includes('.') && s.includes(',')) return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
+  if (s.includes(',')) return parseFloat(s.replace(',', '.')) || 0
+  if (/\.\d{3}$/.test(s)) return parseFloat(s.replace('.', '')) || 0
+  return parseFloat(s) || 0
+}
+
+function cleanStr(str) {
+  return (str || '').replace(/^\uFEFF/, '').replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim()
+}
+
 function processData(rows, { dateCol, campaignCol, kpiCols }) {
-  // Get unique campaigns preserving order
   const campaignMap = new Map()
 
   rows.forEach((row) => {
-    const campaign = row[campaignCol]?.trim()
-    const date = row[dateCol]?.trim()
-    if (!campaign || !date) return
+    const campaign = cleanStr(row[campaignCol])
+    const date = cleanStr(row[dateCol])
+    if (!campaign || !date || !/\d/.test(date)) return
 
     if (!campaignMap.has(campaign)) campaignMap.set(campaign, new Map())
     const dateMap = campaignMap.get(campaign)
@@ -86,34 +89,46 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
     const entry = { date }
     KPIS.forEach((kpi) => {
       const col = kpiCols[kpi.key]
-      if (col) {
-        const raw = row[col]?.replace(/[^0-9.,]/g, '').replace(',', '.') || '0'
-        entry[kpi.key] = parseFloat(raw) || 0
-      }
+      entry[kpi.key] = col ? parseNum(row[col]) : 0
     })
 
-    // Aggregate if same date appears twice for same campaign
     if (dateMap.has(date)) {
       const existing = dateMap.get(date)
       KPIS.forEach((kpi) => {
-        if (kpiCols[kpi.key]) existing[kpi.key] = (existing[kpi.key] || 0) + (entry[kpi.key] || 0)
+        existing[kpi.key] = (existing[kpi.key] || 0) + (entry[kpi.key] || 0)
       })
     } else {
       dateMap.set(date, entry)
     }
   })
 
-  // Convert to sorted array per campaign
   const campaigns = []
   campaignMap.forEach((dateMap, name) => {
     const data = Array.from(dateMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date))
     campaigns.push({ name, data })
   })
-
   return campaigns
 }
 
-// ─── App ──────────────────────────────────────────────────────────────────
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const text = e.target.result
+      if (text.charCodeAt(1) === 0 || (text.length > 10 && text.charCodeAt(2) === 0)) {
+        const r2 = new FileReader()
+        r2.onload = (e2) => resolve(e2.target.result)
+        r2.onerror = reject
+        r2.readAsText(file, 'UTF-16')
+      } else {
+        resolve(text)
+      }
+    }
+    reader.onerror = reject
+    reader.readAsText(file, 'UTF-8')
+  })
+}
+
 export default function App() {
   const [campaigns, setCampaigns] = useState([])
   const [columns, setColumns] = useState(null)
@@ -123,45 +138,59 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef(null)
 
-  const handleFile = useCallback((file) => {
+  const handleFile = useCallback(async (file) => {
     if (!file) return
     setError('')
     setLoading(true)
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const headers = results.meta.fields || []
-        if (headers.length === 0) {
-          setError('El archivo CSV está vacío o no tiene encabezados reconocibles.')
+    try {
+      const text = await readFileAsText(file)
+      Papa.parse(text, {
+        header: true,
+        skipEmptyLines: true,
+        delimiter: '',
+        transformHeader: (h) => cleanStr(h),
+        complete: (results) => {
+          const headers = results.meta.fields || []
+          if (!headers.length) {
+            setError('El archivo CSV está vacío.')
+            setLoading(false)
+            return
+          }
+          const cols = detectColumns(headers)
+          if (!cols.dateCol) {
+            setError(`No se encontró columna de Fecha/Día. Columnas: ${headers.slice(0, 6).join(' | ')}`)
+            setLoading(false)
+            return
+          }
+          if (!cols.campaignCol) {
+            setError(`No se encontró columna de Campaña. Columnas: ${headers.slice(0, 6).join(' | ')}`)
+            setLoading(false)
+            return
+          }
+          const rows = results.data.filter((row) => {
+            const d = cleanStr(row[cols.dateCol])
+            return d && /\d/.test(d)
+          })
+          if (!rows.length) {
+            setError('El archivo no contiene filas de datos válidas.')
+            setLoading(false)
+            return
+          }
+          const processed = processData(rows, cols)
+          setColumns(cols)
+          setCampaigns(processed)
+          setFileName(file.name)
           setLoading(false)
-          return
-        }
-
-        const cols = detectColumns(headers)
-        if (!cols.dateCol) {
-          setError('No se encontró una columna de Fecha. Asegúrate de que el CSV tenga una columna con "Fecha" o "Date".')
+        },
+        error: (err) => {
+          setError(`Error al leer el archivo: ${err.message}`)
           setLoading(false)
-          return
-        }
-        if (!cols.campaignCol) {
-          setError('No se encontró una columna de Campaña. Asegúrate de que tenga una columna con "Campaña" o "Campaign".')
-          setLoading(false)
-          return
-        }
-
-        const processed = processData(results.data, cols)
-        setColumns(cols)
-        setCampaigns(processed)
-        setFileName(file.name)
-        setLoading(false)
-      },
-      error: (err) => {
-        setError(`Error al leer el archivo: ${err.message}`)
-        setLoading(false)
-      },
-    })
+        },
+      })
+    } catch (err) {
+      setError(`Error: ${err.message}`)
+      setLoading(false)
+    }
   }, [])
 
   const handleReset = () => {
@@ -178,7 +207,6 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* ── Header ── */}
       <header className="app-header">
         <div className="header-inner">
           <div className="logo">
@@ -187,10 +215,7 @@ export default function App() {
           </div>
           {campaigns.length > 0 && (
             <div className="header-meta">
-              <span className="file-badge">
-                <span className="dot" />
-                {fileName}
-              </span>
+              <span className="file-badge"><span className="dot" />{fileName}</span>
               <span className="campaigns-count">{campaigns.length} campañas</span>
               <button className="btn-ghost" onClick={handleReset}>Cargar otro CSV</button>
             </div>
@@ -199,39 +224,35 @@ export default function App() {
       </header>
 
       <main className="app-main">
-        {/* ── Upload state ── */}
         {campaigns.length === 0 && (
           <div className="upload-section">
             <div className="upload-hero">
               <h1>Visualiza el evolutivo<br /><em>de tus campañas</em></h1>
-              <p>Sube un archivo CSV con datos de campañas digitales y obtén gráficas de línea por KPI para cada campaña.</p>
+              <p>Sube un archivo CSV exportado de Google Ads y obtén gráficas de línea por KPI para cada campaña.</p>
             </div>
-
             <DropZone onFile={handleFile} fileInputRef={fileInputRef} loading={loading} />
-
             {error && (
               <div className="error-box">
                 <span className="error-icon">⚠</span>
                 {error}
               </div>
             )}
-
             <div className="format-hint">
-              <p className="hint-title">Formato esperado del CSV:</p>
+              <p className="hint-title">Columnas que detecta automáticamente:</p>
               <div className="hint-table">
-                <span>Fecha</span>
+                <span>Día</span>
                 <span>Campaña</span>
                 <span>Coste</span>
                 <span>Impr.</span>
                 <span>Clics</span>
                 <span>Conversiones</span>
+                <span>Coste/conv.</span>
               </div>
-              <p className="hint-note">Los nombres de columna pueden estar en español o inglés. El separador puede ser coma o punto y coma.</p>
+              <p className="hint-note">Compatible con exportaciones de Google Ads · UTF-8 y UTF-16</p>
             </div>
           </div>
         )}
 
-        {/* ── Charts state ── */}
         {campaigns.length > 0 && (
           <div className="charts-section">
             <div className="controls-bar">
@@ -240,20 +261,12 @@ export default function App() {
                 <KpiSelector kpis={availableKpis} selected={selectedKpi} onChange={setSelectedKpi} />
               </div>
               <div className="controls-right">
-                <span className="total-label">
-                  Mostrando <strong>{campaigns.length}</strong> campañas
-                </span>
+                <span className="total-label">Mostrando <strong>{campaigns.length}</strong> campañas</span>
               </div>
             </div>
-
             <div className="charts-grid">
               {campaigns.map((campaign, i) => (
-                <CampaignChart
-                  key={campaign.name}
-                  campaign={campaign}
-                  kpi={currentKpi}
-                  index={i}
-                />
+                <CampaignChart key={campaign.name} campaign={campaign} kpi={currentKpi} index={i} />
               ))}
             </div>
           </div>
