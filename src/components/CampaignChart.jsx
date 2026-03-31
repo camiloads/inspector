@@ -73,7 +73,7 @@ export default function CampaignChart({ campaign, kpi, index }) {
   // Detectar si la campaña tiene ceros al final (alerta)
   const isAlert = hasTrailingZeros(data, kpi.key, 2)
   const lineColor = isAlert ? '#ff3355' : kpi.color
-  const alertLabel = isAlert ? '⚠ Sin actividad reciente' : null
+  const alertLabel = isAlert ? '⚠ ¡Campaña con KPI muy irregular!' : null
 
   // Thin out x-axis labels if too many points
   const tickInterval = data.length > 30 ? Math.floor(data.length / 15) : data.length > 14 ? 1 : 0
