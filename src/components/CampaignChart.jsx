@@ -10,7 +10,6 @@ import {
 } from 'recharts'
 import './CampaignChart.css'
 
-// ─── Custom Tooltip ───────────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label, kpi }) {
   if (!active || !payload?.length) return null
   const val = payload[0].value
@@ -24,21 +23,18 @@ function CustomTooltip({ active, payload, label, kpi }) {
   )
 }
 
-// ─── Format axis values compactly ─────────────────────────────────────────
 function fmtAxis(val) {
   if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`
   if (val >= 1_000) return `${(val / 1_000).toFixed(0)}K`
   return val.toLocaleString('es-CO')
 }
 
-// ─── Format dates for axis (shorter) ──────────────────────────────────────
 function fmtDate(dateStr) {
   const d = new Date(dateStr)
   if (isNaN(d)) return dateStr
   return d.toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
 }
 
-// ─── Compute summary stats ─────────────────────────────────────────────────
 function stats(data, key) {
   const vals = data.map((d) => d[key] || 0)
   const total = vals.reduce((a, b) => a + b, 0)
@@ -47,35 +43,53 @@ function stats(data, key) {
   return { total, avg, max }
 }
 
-// ─── Detect trailing zeros ─────────────────────────────────────────────────
-// Devuelve true si los últimos días consecutivos del KPI son todos cero
-// y la campaña SÍ tuvo datos en algún momento (no es simplemente una campaña sin datos)
+// Detecta ceros consecutivos al final (campaña detenida)
 function hasTrailingZeros(data, key, minDays = 2) {
   const vals = data.map((d) => d[key] || 0)
-  const hadData = vals.some((v) => v > 0)
-  if (!hadData) return false // nunca tuvo datos, no aplica
-
-  // Contar cuántos días finales consecutivos son cero
-  let trailingCount = 0
+  if (!vals.some((v) => v > 0)) return false
+  let count = 0
   for (let i = vals.length - 1; i >= 0; i--) {
-    if (vals[i] === 0) trailingCount++
+    if (vals[i] === 0) count++
     else break
   }
-  return trailingCount >= minDays
+  return count >= minDays
 }
 
-// ─── Component ────────────────────────────────────────────────────────────
+// Alerta específica para Impresiones:
+// - ceros al final (campaña detenida), O
+// - 30% o más de días con impresiones < 10
+function hasImpressionsAlert(data) {
+  const vals = data.map((d) => d['impressions'] || 0)
+  if (!vals.some((v) => v > 0)) return false
+
+  // Ceros consecutivos al final
+  let trailingZeros = 0
+  for (let i = vals.length - 1; i >= 0; i--) {
+    if (vals[i] === 0) trailingZeros++
+    else break
+  }
+  if (trailingZeros >= 2) return true
+
+  // 30%+ días con menos de 10 impresiones
+  const lowDays = vals.filter((v) => v < 10).length
+  return lowDays / vals.length >= 0.3
+}
+
 export default function CampaignChart({ campaign, kpi, index }) {
   const { name, data } = campaign
   const s = stats(data, kpi.key)
   const hasData = data.some((d) => (d[kpi.key] || 0) > 0)
 
-  // Detectar si la campaña tiene ceros al final (alerta)
-  const isAlert = hasTrailingZeros(data, kpi.key, 2)
-  const lineColor = isAlert ? '#ff3355' : kpi.color
-  const alertLabel = isAlert ? '⚠ ¡Campaña con KPI muy irregular!' : null
+  const isImpressions = kpi.key === 'impressions'
+  const isAlert = isImpressions
+    ? hasImpressionsAlert(data)
+    : hasTrailingZeros(data, kpi.key, 2)
 
-  // Thin out x-axis labels if too many points
+  const alertMessage = isImpressions
+    ? '¡Impresiones bajas o irregulares!'
+    : '¡Campaña con KPI crítico!'
+
+  const lineColor = isAlert ? '#ff3355' : kpi.color
   const tickInterval = data.length > 30 ? Math.floor(data.length / 15) : data.length > 14 ? 1 : 0
 
   return (
@@ -83,15 +97,14 @@ export default function CampaignChart({ campaign, kpi, index }) {
       className={`campaign-card ${isAlert ? 'card-alert' : ''}`}
       style={{ animationDelay: `${Math.min(index * 40, 800)}ms` }}
     >
-      {/* Card Header */}
       <div className="card-header">
         <div className="card-title-group">
           <span className="card-index" style={{ color: lineColor }}>
             #{String(index + 1).padStart(2, '0')}
           </span>
           <h3 className="card-title" title={name}>{name}</h3>
-          {alertLabel && (
-            <span className="alert-badge">{alertLabel}</span>
+          {isAlert && (
+            <span className="alert-badge">{alertMessage}</span>
           )}
         </div>
 
@@ -117,7 +130,6 @@ export default function CampaignChart({ campaign, kpi, index }) {
         )}
       </div>
 
-      {/* Chart */}
       <div className="card-chart">
         {!hasData ? (
           <div className="no-data">Sin datos para {kpi.label} en esta campaña</div>
