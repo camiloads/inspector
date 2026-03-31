@@ -68,7 +68,7 @@ function hasImpressionsAlert(data) {
     if (vals[i] === 0) trailingZeros++
     else break
   }
-  if (trailingZeros >= 2) return true
+  if (trailingZeros >= 4) return true
 
   // 30%+ días con menos de 10 impresiones
   const lowDays = vals.filter((v) => v < 10).length
