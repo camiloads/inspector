@@ -3,6 +3,7 @@ import Papa from 'papaparse'
 import CampaignChart from './components/CampaignChart.jsx'
 import KpiSelector from './components/KpiSelector.jsx'
 import DropZone from './components/DropZone.jsx'
+import AlertsView from './components/AlertsView.jsx'
 import './App.css'
 
 export const KPIS = [
@@ -77,21 +78,17 @@ function cleanStr(str) {
 
 function processData(rows, { dateCol, campaignCol, kpiCols }) {
   const campaignMap = new Map()
-
   rows.forEach((row) => {
     const campaign = cleanStr(row[campaignCol])
     const date = cleanStr(row[dateCol])
     if (!campaign || !date || !/\d/.test(date)) return
-
     if (!campaignMap.has(campaign)) campaignMap.set(campaign, new Map())
     const dateMap = campaignMap.get(campaign)
-
     const entry = { date }
     KPIS.forEach((kpi) => {
       const col = kpiCols[kpi.key]
       entry[kpi.key] = col ? parseNum(row[col]) : 0
     })
-
     if (dateMap.has(date)) {
       const existing = dateMap.get(date)
       KPIS.forEach((kpi) => {
@@ -101,7 +98,6 @@ function processData(rows, { dateCol, campaignCol, kpiCols }) {
       dateMap.set(date, entry)
     }
   })
-
   const campaigns = []
   campaignMap.forEach((dateMap, name) => {
     const data = Array.from(dateMap.values()).sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -129,6 +125,32 @@ function readFileAsText(file) {
   })
 }
 
+// ─── Contar alertas para badge en el header ───────────────────────────────
+function countAlerts(campaigns) {
+  if (!campaigns.length) return 0
+  const seen = new Set()
+  campaigns.forEach(({ name, data }) => {
+    const vals = data.map((d) => d['impressions'] || 0)
+    const hadImp = vals.some((v) => v > 0)
+    if (hadImp) {
+      let tz = 0
+      for (let i = vals.length - 1; i >= 0; i--) { if (vals[i] === 0) tz++; else break }
+      const low = vals.filter((v) => v < 10).length
+      if (tz >= 4 || low / vals.length >= 0.3) seen.add(name + '-imp')
+    }
+    const cvals = data.map((d) => d['conversions'] || 0)
+    if (cvals.some((v) => v > 0)) {
+      let tz = 0
+      for (let i = cvals.length - 1; i >= 0; i--) { if (cvals[i] === 0) tz++; else break }
+      if (tz >= 4) seen.add(name + '-conv')
+    }
+    if (!data.some((d) => (d['cost'] || 0) > 0)) seen.add(name + '-cost0')
+    if (!data.some((d) => (d['impressions'] || 0) > 0)) seen.add(name + '-imp0')
+    if (!data.some((d) => (d['conversions'] || 0) > 0)) seen.add(name + '-conv0')
+  })
+  return seen.size
+}
+
 export default function App() {
   const [campaigns, setCampaigns] = useState([])
   const [columns, setColumns] = useState(null)
@@ -136,6 +158,7 @@ export default function App() {
   const [fileName, setFileName] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [view, setView] = useState('charts') // 'charts' | 'alerts'
   const fileInputRef = useRef(null)
 
   const handleFile = useCallback(async (file) => {
@@ -151,41 +174,20 @@ export default function App() {
         transformHeader: (h) => cleanStr(h),
         complete: (results) => {
           const headers = results.meta.fields || []
-          if (!headers.length) {
-            setError('El archivo CSV está vacío.')
-            setLoading(false)
-            return
-          }
+          if (!headers.length) { setError('El archivo CSV está vacío.'); setLoading(false); return }
           const cols = detectColumns(headers)
-          if (!cols.dateCol) {
-            setError(`No se encontró columna de Fecha/Día. Columnas: ${headers.slice(0, 6).join(' | ')}`)
-            setLoading(false)
-            return
-          }
-          if (!cols.campaignCol) {
-            setError(`No se encontró columna de Campaña. Columnas: ${headers.slice(0, 6).join(' | ')}`)
-            setLoading(false)
-            return
-          }
-          const rows = results.data.filter((row) => {
-            const d = cleanStr(row[cols.dateCol])
-            return d && /\d/.test(d)
-          })
-          if (!rows.length) {
-            setError('El archivo no contiene filas de datos válidas.')
-            setLoading(false)
-            return
-          }
+          if (!cols.dateCol) { setError(`No se encontró columna de Fecha/Día. Columnas: ${headers.slice(0, 6).join(' | ')}`); setLoading(false); return }
+          if (!cols.campaignCol) { setError(`No se encontró columna de Campaña. Columnas: ${headers.slice(0, 6).join(' | ')}`); setLoading(false); return }
+          const rows = results.data.filter((row) => { const d = cleanStr(row[cols.dateCol]); return d && /\d/.test(d) })
+          if (!rows.length) { setError('El archivo no contiene filas de datos válidas.'); setLoading(false); return }
           const processed = processData(rows, cols)
           setColumns(cols)
           setCampaigns(processed)
           setFileName(file.name)
+          setView('charts')
           setLoading(false)
         },
-        error: (err) => {
-          setError(`Error al leer el archivo: ${err.message}`)
-          setLoading(false)
-        },
+        error: (err) => { setError(`Error al leer el archivo: ${err.message}`); setLoading(false) },
       })
     } catch (err) {
       setError(`Error: ${err.message}`)
@@ -198,12 +200,12 @@ export default function App() {
     setColumns(null)
     setFileName('')
     setError('')
+    setView('charts')
   }
 
   const currentKpi = KPIS.find((k) => k.key === selectedKpi)
-  const availableKpis = columns
-    ? KPIS.filter((k) => columns.kpiCols[k.key] !== null)
-    : KPIS
+  const availableKpis = columns ? KPIS.filter((k) => columns.kpiCols[k.key] !== null) : KPIS
+  const alertCount = countAlerts(campaigns)
 
   return (
     <div className="app">
@@ -213,6 +215,27 @@ export default function App() {
             <span className="logo-icon">◈</span>
             <span className="logo-text">Campaign<em>Evolution</em></span>
           </div>
+
+          {campaigns.length > 0 && (
+            <div className="header-nav">
+              <button
+                className={`nav-btn ${view === 'charts' ? 'active' : ''}`}
+                onClick={() => setView('charts')}
+              >
+                Gráficas
+              </button>
+              <button
+                className={`nav-btn ${view === 'alerts' ? 'active' : ''}`}
+                onClick={() => setView('alerts')}
+              >
+                Alertas
+                {alertCount > 0 && (
+                  <span className="nav-badge">{alertCount}</span>
+                )}
+              </button>
+            </div>
+          )}
+
           {campaigns.length > 0 && (
             <div className="header-meta">
               <span className="file-badge"><span className="dot" />{fileName}</span>
@@ -253,7 +276,7 @@ export default function App() {
           </div>
         )}
 
-        {campaigns.length > 0 && (
+        {campaigns.length > 0 && view === 'charts' && (
           <div className="charts-section">
             <div className="controls-bar">
               <div className="controls-left">
@@ -271,10 +294,14 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {campaigns.length > 0 && view === 'alerts' && (
+          <AlertsView campaigns={campaigns} />
+        )}
       </main>
 
       <footer className="app-footer">
-        Campaign Evolution Viewer · {new Date().getFullYear()} by Camilo Soler
+        <span>Campaign Evolution Viewer · {new Date().getFullYear()} by Camilo Soler</span>
       </footer>
     </div>
   )
