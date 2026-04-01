@@ -124,6 +124,7 @@ function AlertGroup({ group }) {
     name,
     data,
     total: totalPeriod(data, kpiKey),
+    costTotal: totalPeriod(data, "cost"),
     last:  lastDayWithData(data, kpiKey),
     avg:   avgDaily(data, kpiKey),
   }))
@@ -172,14 +173,18 @@ function AlertGroup({ group }) {
           <button className="sort-btn" onClick={() => toggleSort('avg')}>
             Prom. diario {arrow('avg')}
           </button>
+          <button className="sort-btn" onClick={() => toggleSort('costTotal')}>
+            Coste total {arrow('costTotal')}
+          </button>
         </div>
 
-        {sorted.map(({ name, total, last, avg }) => (
+        {sorted.map(({ name, total, last, avg, costTotal }) => (
           <div key={name} className="alert-row">
             <span className="alert-row-name" title={name}>{name}</span>
             <span className="alert-row-stat">{fmtKpi(kpiKey, total)}</span>
             <span className="alert-row-stat">{last}</span>
             <span className="alert-row-stat">{fmtKpi(kpiKey, avg)}</span>
+            <span className="alert-row-stat">{fmtKpi('cost', costTotal)}</span>
           </div>
         ))}
       </div>
