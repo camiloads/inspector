@@ -109,7 +109,7 @@
 
 .alert-table-head {
   display: grid;
-  grid-template-columns: 1fr 160px 140px 140px;
+  grid-template-columns: 1fr 140px 120px 120px 120px;
   padding: 0.4rem 1.4rem;
   font-size: 0.7rem;
   font-weight: 700;
@@ -121,7 +121,7 @@
 
 .alert-row {
   display: grid;
-  grid-template-columns: 1fr 160px 140px 140px;
+  grid-template-columns: 1fr 140px 120px 120px 120px;
   padding: 0.6rem 1.4rem;
   font-size: 0.83rem;
   border-top: 1px solid var(--border);
@@ -176,8 +176,10 @@
   .alert-row {
     grid-template-columns: 1fr 100px 100px;
   }
-  .alert-table-head span:nth-child(4),
-  .alert-row .alert-row-stat:last-child {
+  .alert-table-head button:nth-child(4),
+  .alert-table-head button:nth-child(5),
+  .alert-row .alert-row-stat:nth-child(4),
+  .alert-row .alert-row-stat:nth-child(5) {
     display: none;
   }
 }
