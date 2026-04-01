@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { KPIS } from '../App.jsx'
 import './AlertsView.css'
 
-// ─── Reutilizamos las mismas funciones de detección ───────────────────────
+// ─── Funciones de detección ───────────────────────────────────────────────
 function hasTrailingZeros(data, key, minDays = 2) {
   const vals = data.map((d) => d[key] || 0)
   if (!vals.some((v) => v > 0)) return false
@@ -46,75 +47,40 @@ function avgDaily(data, key) {
   return vals.reduce((a, b) => a + b, 0) / (vals.length || 1)
 }
 
-function fmtKpi(key, val) {
+function fmtKpi(key, val, forceRound = false) {
   const kpi = KPIS.find((k) => k.key === key)
-  return kpi ? kpi.format(val) : val.toLocaleString('es-ES')
+  if (!kpi) return val.toLocaleString('es-ES')
+  // Impresiones y Clics: siempre entero, sin decimales
+  if (forceRound || key === 'impressions' || key === 'clicks') {
+    return Math.round(val).toLocaleString('es-ES')
+  }
+  return kpi.format(val)
 }
 
 // ─── Construir grupos de alertas ──────────────────────────────────────────
 function buildAlertGroups(campaigns) {
   const groups = [
-    {
-      id: 'imp-alert',
-      title: 'Impresiones bajas o irregulares',
-      kpiKey: 'impressions',
-      color: '#47c8ff',
-      type: 'alert',
-      campaigns: [],
-    },
-    {
-      id: 'conv-alert',
-      title: 'Conversiones — KPI crítico',
-      kpiKey: 'conversions',
-      color: '#b847ff',
-      type: 'alert',
-      campaigns: [],
-    },
-    {
-      id: 'cost-zero',
-      title: 'Sin datos de Coste',
-      kpiKey: 'cost',
-      color: '#e8ff47',
-      type: 'nodata',
-      campaigns: [],
-    },
-    {
-      id: 'imp-zero',
-      title: 'Sin datos de Impresiones',
-      kpiKey: 'impressions',
-      color: '#47c8ff',
-      type: 'nodata',
-      campaigns: [],
-    },
-    {
-      id: 'conv-zero',
-      title: 'Sin datos de Conversiones',
-      kpiKey: 'conversions',
-      color: '#b847ff',
-      type: 'nodata',
-      campaigns: [],
-    },
+    { id: 'imp-alert',  title: 'Impresiones bajas o irregulares', kpiKey: 'impressions', color: '#47c8ff', type: 'alert',  campaigns: [] },
+    { id: 'conv-alert', title: 'Conversiones — KPI crítico',       kpiKey: 'conversions', color: '#b847ff', type: 'alert',  campaigns: [] },
+    { id: 'cost-zero',  title: 'Sin datos de Coste',               kpiKey: 'cost',        color: '#e8ff47', type: 'nodata', campaigns: [] },
+    { id: 'imp-zero',   title: 'Sin datos de Impresiones',         kpiKey: 'impressions', color: '#47c8ff', type: 'nodata', campaigns: [] },
+    { id: 'conv-zero',  title: 'Sin datos de Conversiones',        kpiKey: 'conversions', color: '#b847ff', type: 'nodata', campaigns: [] },
   ]
 
   campaigns.forEach(({ name, data }) => {
-    // Alertas activas
-    if (hasImpressionsAlert(data)) groups[0].campaigns.push({ name, data })
+    if (hasImpressionsAlert(data))              groups[0].campaigns.push({ name, data })
     if (hasTrailingZeros(data, 'conversions', 4)) groups[1].campaigns.push({ name, data })
-
-    // Sin datos
-    if (hasNoData(data, 'cost')) groups[2].campaigns.push({ name, data })
-    if (hasNoData(data, 'impressions')) groups[3].campaigns.push({ name, data })
-    if (hasNoData(data, 'conversions')) groups[4].campaigns.push({ name, data })
+    if (hasNoData(data, 'cost'))               groups[2].campaigns.push({ name, data })
+    if (hasNoData(data, 'impressions'))        groups[3].campaigns.push({ name, data })
+    if (hasNoData(data, 'conversions'))        groups[4].campaigns.push({ name, data })
   })
 
   return groups.filter((g) => g.campaigns.length > 0)
 }
 
-// ─── Exportar a Excel (CSV descargable) ──────────────────────────────────
+// ─── Exportar a CSV compatible con Excel ─────────────────────────────────
 function exportToExcel(groups) {
-  const rows = []
-  rows.push(['Grupo de Alerta', 'Nombre de Campaña', 'KPI', 'Total del Período', 'Último día con dato > 0', 'Promedio Diario'])
-
+  const rows = [['Grupo de Alerta', 'Nombre de Campaña', 'KPI', 'Total del Período', 'Último día con dato > 0', 'Promedio Diario']]
   groups.forEach((group) => {
     group.campaigns.forEach(({ name, data }) => {
       const key = group.kpiKey
@@ -128,8 +94,6 @@ function exportToExcel(groups) {
       ])
     })
   })
-
-  // Construir CSV con BOM para que Excel lo abra correctamente con tildes
   const csv = '\uFEFF' + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
@@ -140,25 +104,51 @@ function exportToExcel(groups) {
   URL.revokeObjectURL(url)
 }
 
-// ─── Fila de campaña ──────────────────────────────────────────────────────
-function CampaignRow({ name, data, kpiKey, color }) {
-  const total = totalPeriod(data, kpiKey)
-  const last = lastDayWithData(data, kpiKey)
-  const avg = avgDaily(data, kpiKey)
+// ─── Grupo con ordenamiento ───────────────────────────────────────────────
+const SORT_OPTIONS = [
+  { key: 'name',   label: 'Campaña' },
+  { key: 'total',  label: 'Total' },
+  { key: 'last',   label: 'Último dato' },
+  { key: 'avg',    label: 'Promedio' },
+]
 
-  return (
-    <div className="alert-row">
-      <span className="alert-row-name" title={name}>{name}</span>
-      <span className="alert-row-stat">{fmtKpi(kpiKey, total)}</span>
-      <span className="alert-row-stat">{last}</span>
-      <span className="alert-row-stat">{fmtKpi(kpiKey, avg)}</span>
-    </div>
-  )
-}
-
-// ─── Grupo de alertas ─────────────────────────────────────────────────────
 function AlertGroup({ group }) {
+  const [sortKey, setSortKey] = useState('name')
+  const [sortDir, setSortDir] = useState('asc')
+
   const isAlert = group.type === 'alert'
+  const kpiKey = group.kpiKey
+
+  // Enriquecer campañas con valores calculados para poder ordenar
+  const enriched = group.campaigns.map(({ name, data }) => ({
+    name,
+    data,
+    total: totalPeriod(data, kpiKey),
+    last:  lastDayWithData(data, kpiKey),
+    avg:   avgDaily(data, kpiKey),
+  }))
+
+  const sorted = [...enriched].sort((a, b) => {
+    let va = a[sortKey]
+    let vb = b[sortKey]
+    if (sortKey === 'name' || sortKey === 'last') {
+      va = String(va).toLowerCase()
+      vb = String(vb).toLowerCase()
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    }
+    return sortDir === 'asc' ? va - vb : vb - va
+  })
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  const arrow = (key) => {
+    if (sortKey !== key) return <span className="sort-arrow inactive">↕</span>
+    return <span className="sort-arrow active">{sortDir === 'asc' ? '↑' : '↓'}</span>
+  }
+
   return (
     <div className={`alert-group ${isAlert ? 'group-alert' : 'group-nodata'}`}>
       <div className="alert-group-header">
@@ -168,14 +158,29 @@ function AlertGroup({ group }) {
       </div>
 
       <div className="alert-table">
+        {/* Cabecera ordenable */}
         <div className="alert-table-head">
-          <span>Campaña</span>
-          <span>Total período</span>
-          <span>Último dato</span>
-          <span>Prom. diario</span>
+          <button className="sort-btn" onClick={() => toggleSort('name')}>
+            Campaña {arrow('name')}
+          </button>
+          <button className="sort-btn" onClick={() => toggleSort('total')}>
+            Total período {arrow('total')}
+          </button>
+          <button className="sort-btn" onClick={() => toggleSort('last')}>
+            Último dato {arrow('last')}
+          </button>
+          <button className="sort-btn" onClick={() => toggleSort('avg')}>
+            Prom. diario {arrow('avg')}
+          </button>
         </div>
-        {group.campaigns.map(({ name, data }) => (
-          <CampaignRow key={name} name={name} data={data} kpiKey={group.kpiKey} color={group.color} />
+
+        {sorted.map(({ name, total, last, avg }) => (
+          <div key={name} className="alert-row">
+            <span className="alert-row-name" title={name}>{name}</span>
+            <span className="alert-row-stat">{fmtKpi(kpiKey, total)}</span>
+            <span className="alert-row-stat">{last}</span>
+            <span className="alert-row-stat">{fmtKpi(kpiKey, avg)}</span>
+          </div>
         ))}
       </div>
     </div>
