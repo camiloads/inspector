@@ -7,18 +7,22 @@ import {
   Tooltip,
   ResponsiveContainer,
   ReferenceLine,
+  Legend,
 } from 'recharts'
 import './CampaignChart.css'
 
-function CustomTooltip({ active, payload, label, kpi }) {
+function CustomTooltip({ active, payload, label, kpi, showCost }) {
   if (!active || !payload?.length) return null
-  const val = payload[0].value
   return (
     <div className="chart-tooltip">
       <p className="tt-date">{label}</p>
-      <p className="tt-value" style={{ color: kpi.color }}>
-        {kpi.format(val)}
-      </p>
+      {payload.map((entry) => (
+        <p key={entry.dataKey} className="tt-value" style={{ color: entry.stroke }}>
+          {entry.dataKey === 'cost'
+            ? `Coste: €${Number(entry.value).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : `${kpi.label}: ${kpi.format(entry.value)}`}
+        </p>
+      ))}
     </div>
   )
 }
@@ -43,7 +47,6 @@ function stats(data, key) {
   return { total, avg, max }
 }
 
-// Detecta ceros consecutivos al final (campaña detenida)
 function hasTrailingZeros(data, key, minDays = 2) {
   const vals = data.map((d) => d[key] || 0)
   if (!vals.some((v) => v > 0)) return false
@@ -55,22 +58,15 @@ function hasTrailingZeros(data, key, minDays = 2) {
   return count >= minDays
 }
 
-// Alerta específica para Impresiones:
-// - ceros al final (campaña detenida), O
-// - 30% o más de días con impresiones < 10
 function hasImpressionsAlert(data) {
   const vals = data.map((d) => d['impressions'] || 0)
   if (!vals.some((v) => v > 0)) return false
-
-  // Ceros consecutivos al final
   let trailingZeros = 0
   for (let i = vals.length - 1; i >= 0; i--) {
     if (vals[i] === 0) trailingZeros++
     else break
   }
   if (trailingZeros >= 4) return true
-
-  // 30%+ días con menos de 10 impresiones
   const lowDays = vals.filter((v) => v < 10).length
   return lowDays / vals.length >= 0.3
 }
@@ -79,6 +75,9 @@ export default function CampaignChart({ campaign, kpi, index }) {
   const { name, data } = campaign
   const s = stats(data, kpi.key)
   const hasData = data.some((d) => (d[kpi.key] || 0) > 0)
+
+  // Mostrar línea de coste punteada cuando el KPI seleccionado NO es coste
+  const showCostLine = kpi.key !== 'cost'
 
   const isImpressions = kpi.key === 'impressions'
   const isAlert = isImpressions
@@ -90,6 +89,7 @@ export default function CampaignChart({ campaign, kpi, index }) {
     : '¡Campaña con KPI crítico!'
 
   const lineColor = isAlert ? '#ff3355' : kpi.color
+  const costColor = '#e8ff47'
   const tickInterval = data.length > 30 ? Math.floor(data.length / 15) : data.length > 14 ? 1 : 0
 
   return (
@@ -103,9 +103,7 @@ export default function CampaignChart({ campaign, kpi, index }) {
             #{String(index + 1).padStart(2, '0')}
           </span>
           <h3 className="card-title" title={name}>{name}</h3>
-          {isAlert && (
-            <span className="alert-badge">{alertMessage}</span>
-          )}
+          {isAlert && <span className="alert-badge">{alertMessage}</span>}
         </div>
 
         {hasData && (
@@ -159,6 +157,7 @@ export default function CampaignChart({ campaign, kpi, index }) {
               />
 
               <YAxis
+                yAxisId="kpi"
                 tickFormatter={fmtAxis}
                 tick={{ fill: '#666677', fontSize: 10, fontFamily: 'DM Mono' }}
                 axisLine={false}
@@ -166,16 +165,31 @@ export default function CampaignChart({ campaign, kpi, index }) {
                 width={52}
               />
 
-              <Tooltip content={<CustomTooltip kpi={kpi} />} />
+              {showCostLine && (
+                <YAxis
+                  yAxisId="cost"
+                  orientation="right"
+                  tickFormatter={fmtAxis}
+                  tick={{ fill: '#666677', fontSize: 10, fontFamily: 'DM Mono' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={48}
+                />
+              )}
+
+              <Tooltip content={<CustomTooltip kpi={kpi} showCost={showCostLine} />} />
 
               <ReferenceLine
+                yAxisId="kpi"
                 y={s.avg}
                 stroke={lineColor}
                 strokeDasharray="4 4"
                 strokeOpacity={0.3}
               />
 
+              {/* Línea principal del KPI seleccionado */}
               <Line
+                yAxisId="kpi"
                 type="monotone"
                 dataKey={kpi.key}
                 stroke={lineColor}
@@ -183,10 +197,38 @@ export default function CampaignChart({ campaign, kpi, index }) {
                 dot={data.length <= 14 ? { r: 3, fill: lineColor, strokeWidth: 0 } : false}
                 activeDot={{ r: 5, fill: lineColor, stroke: '#0a0a0f', strokeWidth: 2 }}
               />
+
+              {/* Línea de Coste punteada (solo cuando el KPI activo no es Coste) */}
+              {showCostLine && (
+                <Line
+                  yAxisId="cost"
+                  type="monotone"
+                  dataKey="cost"
+                  stroke={costColor}
+                  strokeWidth={1.5}
+                  strokeDasharray="5 4"
+                  dot={false}
+                  activeDot={{ r: 4, fill: costColor, stroke: '#0a0a0f', strokeWidth: 2 }}
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* Leyenda mini debajo de la gráfica */}
+      {showCostLine && hasData && (
+        <div className="chart-legend">
+          <span className="legend-item" style={{ color: lineColor }}>
+            <span className="legend-line solid" style={{ background: lineColor }} />
+            {kpi.label}
+          </span>
+          <span className="legend-item" style={{ color: costColor }}>
+            <span className="legend-line dashed" style={{ borderColor: costColor }} />
+            Coste
+          </span>
+        </div>
+      )}
     </div>
   )
 }
