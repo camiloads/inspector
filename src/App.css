@@ -90,7 +90,6 @@
 /* ── Main ────────────────────────────────────────────────────────────────── */
 .app-main {
   flex: 1;
-  max-width: 1400px;
   width: 100%;
   margin: 0 auto;
   padding: 0 2rem 4rem;
@@ -98,24 +97,29 @@
 
 /* ── Upload Section ──────────────────────────────────────────────────────── */
 .upload-section {
+  min-height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2.5rem;
-  padding: 5rem 0 2rem;
+  padding: 4rem 1rem;
   animation: fadeIn 0.5s ease;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
 .upload-hero {
   text-align: center;
+  width: 100%;
 }
 
 .upload-hero h1 {
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.03em;
-  margin-bottom: 1rem;
+  margin-bottom: 1.2rem;
 }
 
 .upload-hero h1 em {
@@ -124,10 +128,11 @@
 }
 
 .upload-hero p {
-  font-size: 1rem;
+  font-size: 1.05rem;
   color: var(--text-muted);
-  max-width: 480px;
-  line-height: 1.6;
+  max-width: 500px;
+  margin: 0 auto;
+  line-height: 1.65;
 }
 
 /* ── Error Box ───────────────────────────────────────────────────────────── */
@@ -141,7 +146,7 @@
   padding: 1rem 1.2rem;
   font-size: 0.88rem;
   color: #ff8080;
-  max-width: 560px;
+  width: 100%;
   line-height: 1.5;
 }
 
@@ -150,15 +155,15 @@
 /* ── Format Hint ─────────────────────────────────────────────────────────── */
 .format-hint {
   text-align: center;
-  max-width: 600px;
+  width: 100%;
 }
 
 .hint-title {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--text-muted);
   margin-bottom: 0.6rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
@@ -169,13 +174,16 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.75rem;
+  width: 100%;
 }
 
 .hint-table span {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  padding: 7px 12px;
+  font-size: 0.73rem;
+  padding: 8px 0;
+  flex: 1;
+  text-align: center;
   border-right: 1px solid var(--border);
   background: var(--bg2);
   color: var(--text-muted);
@@ -188,11 +196,14 @@
 .hint-note {
   font-size: 0.75rem;
   color: var(--text-muted);
-  opacity: 0.7;
+  opacity: 0.65;
+  line-height: 1.5;
 }
 
 /* ── Charts Section ──────────────────────────────────────────────────────── */
 .charts-section {
+  max-width: 1400px;
+  margin: 0 auto;
   padding: 1.5rem 0;
   animation: fadeIn 0.5s ease;
 }
@@ -262,5 +273,54 @@
   .app-main { padding: 0 1rem 3rem; }
   .header-inner { padding: 0 1rem; }
   .hint-table { flex-wrap: wrap; }
+  .hint-table span { flex: none; width: 50%; }
   .controls-bar { top: 60px; }
+  .upload-section { padding: 2rem 0.5rem; gap: 2rem; }
+}
+
+/* ── Nav tabs en header ── */
+.header-nav {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-btn:hover {
+  color: var(--text);
+}
+
+.nav-btn.active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.nav-badge {
+  background: #ff3355;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 20px;
+  min-width: 18px;
+  text-align: center;
 }
