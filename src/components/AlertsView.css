@@ -1,0 +1,183 @@
+/* ── Vista general ── */
+.alerts-view {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+  animation: fadeIn 0.4s ease;
+}
+
+.alerts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+}
+
+.alerts-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 0.3rem;
+}
+
+.alerts-subtitle {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ── Botón exportar ── */
+.btn-export {
+  background: var(--accent);
+  color: #0a0a0f;
+  border: none;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-export:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+}
+
+/* ── Grupos ── */
+.alerts-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.alert-group {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.group-alert {
+  border-color: rgba(255, 51, 85, 0.25);
+  background: rgba(255, 51, 85, 0.03);
+}
+
+.group-nodata {
+  background: var(--bg2);
+}
+
+.alert-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.alert-group-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.alert-group-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  flex: 1;
+}
+
+.alert-group-count {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg3);
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+}
+
+/* ── Tabla ── */
+.alert-table {
+  padding: 0.5rem 0;
+}
+
+.alert-table-head {
+  display: grid;
+  grid-template-columns: 1fr 160px 140px 140px;
+  padding: 0.4rem 1.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.alert-row {
+  display: grid;
+  grid-template-columns: 1fr 160px 140px 140px;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.83rem;
+  border-top: 1px solid var(--border);
+  transition: background 0.15s;
+  align-items: center;
+}
+
+.alert-row:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.alert-row-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 1rem;
+  color: var(--text);
+}
+
+.alert-row-stat {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* ── Estado vacío ── */
+.alerts-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 6rem 2rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.alerts-empty-icon {
+  font-size: 2.5rem;
+  color: #47ff8a;
+  opacity: 0.7;
+}
+
+.alerts-empty p {
+  font-size: 1rem;
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .alert-table-head,
+  .alert-row {
+    grid-template-columns: 1fr 100px 100px;
+  }
+  .alert-table-head span:nth-child(4),
+  .alert-row .alert-row-stat:last-child {
+    display: none;
+  }
+}
