@@ -152,3 +152,36 @@
   letter-spacing: 0.02em;
   flex-shrink: 0;
 }
+
+/* ── Dual line legend ── */
+.chart-legend {
+  display: flex;
+  gap: 1.2rem;
+  padding: 0.4rem 0 0.2rem;
+  justify-content: flex-end;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  opacity: 0.8;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 22px;
+  height: 2px;
+}
+
+.legend-line.solid {
+  border-radius: 2px;
+}
+
+.legend-line.dashed {
+  background: transparent;
+  border-top: 2px dashed;
+  height: 0;
+}
