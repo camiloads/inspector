@@ -33,7 +33,7 @@
   font-weight: 800;
   letter-spacing: -0.02em;
 }
-.logo-icon { color: var(--accent); font-size: 1.3rem; }
+.logo-img { width: 28px; height: 28px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
 .logo-text em { color: var(--accent); font-style: normal; }
 
 .header-meta {
@@ -323,4 +323,32 @@
   border-radius: 20px;
   min-width: 18px;
   text-align: center;
+}
+
+/* ── Hero logo & Angry Inspector title ── */
+.hero-logo {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 24px;
+  margin-bottom: 1.2rem;
+  border: 2px solid var(--border-bright);
+  box-shadow: 0 0 40px rgba(232,255,71,0.08);
+}
+
+.upload-hero h1 {
+  font-size: clamp(2.4rem, 6vw, 4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.2rem;
+}
+
+.upload-hero h1 em {
+  color: var(--accent);
+  font-style: normal;
+}
+
+.title-white {
+  color: #ffffff;
 }
