@@ -212,8 +212,8 @@ export default function App() {
       <header className="app-header">
         <div className="header-inner">
           <div className="logo">
-            <span className="logo-icon">◈</span>
-            <span className="logo-text">Campaign<em>Evolution</em></span>
+            <img src="/Logo-Angry-Inspector.jpeg" alt="Angry Inspector" className="logo-img" />
+            <span className="logo-text">Angry<em>Inspector</em></span>
           </div>
 
           {campaigns.length > 0 && (
@@ -250,8 +250,9 @@ export default function App() {
         {campaigns.length === 0 && (
           <div className="upload-section">
             <div className="upload-hero">
-              <h1>Visualiza el evolutivo<br /><em>de tus campañas</em></h1>
-              <p>Sube un archivo CSV exportado de Google Ads y obtén gráficas de línea por KPI para cada campaña.</p>
+              <img src="/Logo-Angry-Inspector.jpeg" alt="Angry Inspector" className="hero-logo" />
+              <h1><em>ANGRY</em> <span className="title-white">INSPECTOR</span></h1>
+              <p>Sube un archivo CSV exportado de Google Ads y deja que el inspector siga el rastro de lo irregular en cada campaña.</p>
             </div>
             <DropZone onFile={handleFile} fileInputRef={fileInputRef} loading={loading} />
             {error && (
@@ -301,7 +302,7 @@ export default function App() {
       </main>
 
       <footer className="app-footer">
-        <span>Campaign Evolution Viewer · {new Date().getFullYear()} by Camilo Soler</span>
+        <span>Angry Inspector · {new Date().getFullYear()} by Camilo Soler</span>
       </footer>
     </div>
   )
