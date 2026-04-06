@@ -327,14 +327,12 @@
 
 /* ── Hero logo & Angry Inspector title ── */
 .hero-logo {
-  width: 160px;
-  height: 160px;
-  object-fit: cover;
-  border-radius: 16px;
+  width: 180px;
+  height: auto;
+  border-radius: 20px;
   margin-bottom: 1.2rem;
   border: 2px solid var(--border-bright);
   box-shadow: 0 0 40px rgba(168,241,2,0.08);
-  object-position: center bottom;
 }
 
 .upload-hero h1 {
