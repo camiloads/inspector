@@ -80,7 +80,7 @@ function buildAlertGroups(campaigns) {
 
 // ─── Exportar a CSV compatible con Excel ─────────────────────────────────
 function exportToExcel(groups) {
-  const rows = [['Grupo de Alerta', 'Nombre de Campaña', 'KPI', 'Total del Período', 'Último día con dato > 0', 'Promedio Diario']]
+  const rows = [['Grupo de Alerta', 'Nombre de Campaña', 'KPI', 'Total del Período', 'Último día con dato > 0', 'Promedio Diario', 'Coste Total']]
   groups.forEach((group) => {
     group.campaigns.forEach(({ name, data }) => {
       const key = group.kpiKey
@@ -91,6 +91,7 @@ function exportToExcel(groups) {
         fmtKpi(key, totalPeriod(data, key)),
         lastDayWithData(data, key),
         fmtKpi(key, avgDaily(data, key)),
+        fmtKpi('cost', totalPeriod(data, 'cost')),
       ])
     })
   })
